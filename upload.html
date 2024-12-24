@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload PCAP File</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Upload PCAP File with Username</h2>
+        <form id="uploadForm" action="/" method="POST" enctype="multipart/form-data" onsubmit="return validateForm()">
+            <div class="input-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" autocomplete="off">
+                <small class="error-message" id="usernameError"></small>
+            </div>
+            <div class="input-group">
+                <label for="file">Upload .pcap File:</label>
+                <input type="file" id="file" name="file" accept=".pcap">
+                <small class="error-message" id="fileError"></small>
+            </div>
+            <button type="submit">Upload</button>
+        </form>
+
+        <!-- Display flash messages -->
+        <div class="messages">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <p class="{{ category }}">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+            {% endwith %}
+        </div>
+    </div>
+
+    <script>
+        // Validate Form Inputs
+        function validateForm() {
+            let isValid = true;
+            const username = document.getElementById('username');
+            const fileInput = document.getElementById('file');
+            const usernameError = document.getElementById('usernameError');
+            const fileError = document.getElementById('fileError');
+
+            // Clear previous errors
+            username.classList.remove('error');
+            fileInput.classList.remove('error');
+            usernameError.textContent = '';
+            fileError.textContent = '';
+
+            // Validate username
+            if (username.value.trim() === '') {
+                username.classList.add('error');
+                usernameError.textContent = 'Please enter username';
+                isValid = false;
+            }
+
+            // Validate file input
+            if (!fileInput.value) {
+                fileInput.classList.add('error');
+                fileError.textContent = 'Please upload a .pcap file';
+                isValid = false;
+            } else if (!fileInput.value.endsWith('.pcap')) {
+                fileInput.classList.add('error');
+                fileError.textContent = 'Please upload a valid .pcap file';
+                isValid = false;
+            }
+            return isValid;
+        }
+
+        // Clear Flash Messages and Form Fields on Page Load
+        window.onload = function() {
+            // Clear flash messages if the page is refreshed
+            if (performance.navigation.type === 1) {
+                const messages = document.querySelector('.messages');
+                if (messages) messages.style.display = 'none';
+
+                // Clear form fields
+                document.getElementById('username').value = '';
+                document.getElementById('file').value = '';
+            }
+        };
+    </script>
+</body>
+</html>

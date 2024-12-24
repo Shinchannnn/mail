@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Results</title>
+<style>
+/* Existing styles */
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(to bottom right, #ffffff, #d7e8f7);
+}
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    height: 68vh;
+    padding: 10px;
+}
+
+input[type="text"] {
+    width: 90%;
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 2px solid #007bff;
+    border-radius: 8px;
+    font-size: 16px;
+}
+.result-box p {
+    margin: 5px 0;
+    cursor: pointer;
+    color: #007bff;
+    padding-left: 5px;
+}
+.result-box p:hover {
+    text-decoration: underline;
+}
+.search_bar {
+    align-content: left;
+    text-align: center;
+}
+.search-container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 30px auto;
+    width: 55%;
+}
+.search-container label {
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+}
+.search-container input[type="text"] {
+    width: 70%;
+}
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+    height: 55vh; /* Reduced height to make space for the footer */
+    padding: 10px;
+}
+
+.grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background-color: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    height: 90%; /* Adjusted height to reduce size */
+}
+
+.result-box {
+    min-height: 290px; /* Adjusted to reduce size */
+    max-height: 290px; /* Adjusted to reduce size */
+    max-width: 380px; /* Reduced width */
+    min-width: 380px; /* Reduced width */
+    border: 2px solid #ccc;
+    border-radius: 8px;
+    padding: 3px;
+    background-color: #f9f9f9;
+    overflow-y: auto;
+    text-align: left;
+}
+
+.validate-container {
+    display: flex;
+    justify-content: center;
+    position: fixed;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+}
+
+.validate-btn {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: background-color 0.3s ease;
+}
+.validate-btn:hover {
+    background-color: #0056b3;
+}
+</style>
+
+<script src="mongodb.js"></script>
+</head>
+<body>
+<h1><center>PCAP Analyzer</center></h1>
+
+<!-- Add Template Name Field -->
+<!-- Template Name Input Field -->
+<div class="search-container">
+    <label for="template_name">Enter Template Name:</label>
+    <input
+        type="text"
+        id="template_name"
+        placeholder="Enter template name..."
+        autocomplete="off"
+        value=""
+        required
+    />
+</div>
+
+
+
+
+<!-- Existing Search Field -->
+
+
+
+<!-- Top Search Bar -->
+<div class="search-container">
+    <label for="search_bar">Enter Parameter:</label>
+    <input
+        type="text"
+        id="search_bar"
+        placeholder="Search keys or values..."
+        onkeyup="mainSearch(this.value)"
+        autocomplete="off"
+    />
+</div>
+
+<div class="grid-container">
+<!-- Key Field -->
+<div class="grid-item">
+    <h3>Processed Keys</h3>
+    <input type="text" id="key_search" placeholder="Enter Key" onkeyup="searchKeys(this.value)" autocomplete="off">
+    <div class="result-box" id="key_results">
+        Results will appear here.
+    </div>
+</div>
+
+<!-- Value Field -->
+<div class="grid-item">
+    <h3>Processed Values</h3>
+    <input type="text" id="value_search" placeholder="Enter Value" onkeyup="searchValues(this.value)" autocomplete="off">
+    <div class="result-box" id="value_results">
+        Results will appear here.
+    </div>
+</div>
+
+<!-- Selected Key-Value -->
+<div class="grid-item">
+    <h3>Block</h3>&nbsp;&nbsp;&nbsp;&nbsp;
+    <div class="result-box" id="selected_results">
+        Selected Key: <strong>None</strong><br>
+        Selected Value: <strong>None</strong>
+    </div>
+</div>
+</div>
+
+<div class="validate-container">
+    <form id="validate-form" method="GET" action="/validate">
+        <input type="hidden" id="hidden-key" name="key" value="">
+        <input type="hidden" id="hidden-value" name="value" value="">
+        <!-- Use 'submit' type for the button to trigger form submission -->
+        <button type="submit" class="validate-btn" onclick="validateSelection(event)">Validate</button>
+    </form>
+</div>
+<p id="templateNameDisplay"></p>
+
+
+
+<script>
+const data = JSON.parse('{{ json_data | tojson }}');
+let selectedKey = null;
+let selectedValue = null;
+let allValuesForSelectedKey = [];
+
+// Function to handle the main search (key or value)
+function mainSearch(input) {
+    if (!input) {
+        clearResults();
+        return;
+    }
+
+    const keyValueMatch = input.match(/"([^\"]+)":\s*"([^\"]+)"/); // Check for key-value format
+
+    if (keyValueMatch) {
+        // If key-value pair is found, display the specific key
+        const [_, key, value] = keyValueMatch;
+        showSpecificKeyValue(key, value);
+    } else if (isNaN(input.trim())) {
+        // If it's just a key (non-numeric), search for matching keys
+        filterKeysBasedOnKeyAndValue(input.trim(), '');
+    } else {
+        // If it's a value, search for matching keys based on the value
+        filterKeysBasedOnKeyAndValue('', input.trim());
+    }
+}
+
+// Function to show the specific key when both key and value are entered
+function showSpecificKeyValue(keyInput, valueInput) {
+    const matchedKey = findExactKeyValue(keyInput, valueInput);
+    if (matchedKey) {
+        document.getElementById('key_results').innerHTML = `<p onclick="selectKey('${matchedKey}')">${matchedKey}</p>`;
+    } else {
+        document.getElementById('key_results').innerHTML = 'No matching key-value pair found.';
+    }
+}
+
+// Function to find the exact key-value pair in the JSON
+function findExactKeyValue(keyInput, valueInput) {
+    let matchedKey = null;
+    function traverse(obj) {
+        for (const key in obj) {
+            if (key === keyInput && obj[key] === valueInput) {
+                matchedKey = key;
+            }
+            if (typeof obj[key] === 'object') {
+                traverse(obj[key]);
+            }
+        }
+    }
+    traverse(data);
+    return matchedKey;
+}
+
+function filterKeysBasedOnKeyAndValue(keyInput, valueInput) {
+    const matchedKeys = [];
+
+    function traverse(obj) {
+        for (const key in obj) {
+            const matchesKey = keyInput && key.toLowerCase().includes(keyInput.toLowerCase());
+            const matchesValue =
+                valueInput &&
+                ((typeof obj[key] === 'string' && obj[key].toLowerCase().includes(valueInput.toLowerCase())) ||
+                    (typeof obj[key] === 'number' && obj[key].toString().includes(valueInput)));
+
+            if ((keyInput && matchesKey) || (valueInput && matchesValue)) {
+                matchedKeys.push(key);
+            }
+
+            if (typeof obj[key] === 'object') {
+                traverse(obj[key]);
+            }
+        }
+    }
+
+    traverse(data);
+    filteredKeys = [...new Set(matchedKeys)];
+    document.getElementById('key_results').innerHTML = filteredKeys.length
+        ? filteredKeys.map(k => `<p onclick="selectKey('${k}')">${k}</p>`).join('')
+        : 'No matching keys found.';
+}
+
+// Function to clear the results and reset search boxes
+function clearResults() {
+    document.getElementById('key_results').innerHTML = 'Results will appear here.';
+    document.getElementById('value_results').innerHTML = 'Results will appear here.';
+    document.getElementById('selected_results').innerHTML = 'Selected Key: None<br>Selected Value: None';
+    document.getElementById('key_search').value = '';
+    document.getElementById('value_search').value = '';
+    selectedKey = null;
+    selectedValue = null;
+    allValuesForSelectedKey = [];
+}
+
+// When a user removes the entered key, clear the value results and the selected block
+function removeKey() {
+    selectedKey = null;
+    document.getElementById('key_search').value = '';
+    document.getElementById('value_results').innerHTML = 'Results will appear here.';
+    document.getElementById('selected_results').innerHTML = 'Selected Key: None<br>Selected Value: None';
+}
+
+// When a user removes the entered value, clear the selected value block
+function removeValue() {
+    selectedValue = null;
+    document.getElementById('value_search').value = '';
+    document.getElementById('selected_results').innerHTML = 'Selected Key: None<br>Selected Value: None';
+}
+
+// Function to search for matching keys (key search box)
+function searchKeys(input) {
+    if (!input) {
+        clearResults();
+        return;
+    }
+
+    const keys = filteredKeys.filter(key => key.toLowerCase().includes(input.toLowerCase()));
+    document.getElementById('key_results').innerHTML = keys.length
+        ? keys.map(k => `<p onclick="selectKey('${k}')">${k}</p>`).join('')
+        : 'No matching keys found.';
+}
+
+// Function to search for matching values (value search box)
+function searchValues(input) {
+    if (!selectedKey) {
+        alert('Please select a key first.');
+        return;
+    }
+
+    if (!input) {
+        document.getElementById('value_results').innerHTML = allValuesForSelectedKey.length
+            ? allValuesForSelectedKey.map(v => `<p onclick="selectValue('${v}')">${v}</p>`).join('')
+            : 'No values found for the selected key.';
+        return;
+    }
+
+    const filteredValues = allValuesForSelectedKey.filter(value =>
+        value.toLowerCase().includes(input.toLowerCase())
+    );
+    document.getElementById('value_results').innerHTML = filteredValues.length
+        ? filteredValues.map(v => `<p onclick="selectValue('${v}')">${v}</p>`).join('')
+        : 'No matching values found.';
+}
+
+// Function to select a key from the result box
+function selectKey(key) {
+    selectedKey = key;
+    document.getElementById('key_search').value = key;
+
+    allValuesForSelectedKey = [];
+    function traverse(obj) {
+        for (const k in obj) {
+            if (k === selectedKey) {
+                const value = obj[k];
+                if (typeof value === 'string') {
+                    allValuesForSelectedKey.push(value);
+                }
+            }
+            if (typeof obj[k] === 'object') {
+                traverse(obj[k]);
+            }
+        }
+    }
+    traverse(data);
+
+    const uniqueValues = [...new Set(allValuesForSelectedKey)];
+    document.getElementById('value_results').innerHTML = uniqueValues.length
+        ? uniqueValues.map(v => `<p onclick="selectValue('${v}')">${v}</p>`).join('')
+        : 'No values found for the selected key.';
+}
+
+// Function to select a value from the result box
+function selectValue(value) {
+    selectedValue = value;
+    document.getElementById('value_search').value = value;
+
+    document.getElementById('selected_results').innerHTML = `
+        Selected Key: <strong>${selectedKey}</strong><br>
+        Selected Value: <strong>${selectedValue}</strong>
+    `;
+}
+function validateSelection(event) {
+    const templateNameInput = document.getElementById('template_name');
+    const templateName = templateNameInput.value.trim();
+
+    // Check if the template name is empty
+    if (!templateName) {
+        highlightError(templateNameInput, 'Please fill this field.');
+        event.preventDefault();
+        return;
+    }
+
+    // Validate: Disallow purely numerical values
+    const isOnlyNumbers = /^\d+$/.test(templateName);
+    const isValidInput = /^[a-zA-Z0-9]+$/.test(templateName); // Character + numerical allowed
+
+    if (isOnlyNumbers || !isValidInput) {
+        highlightError(templateNameInput, 'Please enter character or alphanumeric value only.');
+        event.preventDefault();
+        return;
+    } else {
+        // Remove red border and error message if field is valid
+        clearError(templateNameInput);
+    }
+
+    // Ensure key and value are selected
+    if (!selectedKey || !selectedValue) {
+        alert('Please select both a key and a value before validating.');
+        event.preventDefault();
+        return;
+    }
+
+    // Populate the hidden input fields with selected key and value
+    document.getElementById('hidden-key').value = selectedKey;
+    document.getElementById('hidden-value').value = selectedValue;
+}
+
+// Highlight the input field with an error message
+function highlightError(inputElement, message) {
+    inputElement.style.border = '2px solid red';
+
+    let errorMessage = document.getElementById(inputElement.id + '-error');
+    if (!errorMessage) {
+        errorMessage = document.createElement('span');
+        errorMessage.id = inputElement.id + '-error';
+        errorMessage.style.color = 'red';
+        errorMessage.style.fontSize = '14px';
+        errorMessage.style.marginLeft = '10px';
+        inputElement.parentNode.appendChild(errorMessage);
+    }
+    errorMessage.textContent = message;
+}
+
+// Clear the error message and border
+function clearError(inputElement) {
+    inputElement.style.border = '2px solid #007bff';
+    const errorMessage = document.getElementById(inputElement.id + '-error');
+    if (errorMessage) {
+        errorMessage.remove();
+    }
+}
+
+
+const selectedPairs = []; // This array should contain key-value pairs in the format { key: "key", value: "value" }.
+
+// Attach a submit event listener to the form to include selected pairs dynamically.
+document.querySelector('form').addEventListener('submit', function (e) {
+    // Create a hidden input element to store selected pairs as JSON.
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.name = 'selected_pairs';
+    hiddenInput.value = JSON.stringify(selectedPairs); // Convert the selectedPairs array to a JSON string.
+    
+    // Append the hidden input to the form before submission.
+    this.appendChild(hiddenInput);
+});
+
+
+
+// Clear all results but keep the template name in localStorage
+function clearAllOnRefresh() {
+    // Clear search results and input fields
+    document.getElementById('key_results').innerHTML = 'Results will appear here.';
+    document.getElementById('value_results').innerHTML = 'Results will appear here.';
+    document.getElementById('selected_results').innerHTML = 'Selected Key: None<br>Selected Value: None';
+    document.getElementById('key_search').value = '';
+    document.getElementById('value_search').value = '';
+    // Do not clear template name from input field
+}
+  // Make sure this is defined
+function loadTemplateName() {
+    // Your function logic here
+    console.log("Template Name Loaded!");
+}
+
+window.onload = function() {
+    loadTemplateName();  // This will call your function
+    
+    // Retrieve and load template name from localStorage
+    const templateInput = document.getElementById('template_name');
+    const savedTemplateName = localStorage.getItem('templateName');
+    if (savedTemplateName) {
+        templateInput.value = savedTemplateName; // Set the input value
+    }
+
+    // Save the template name to localStorage on input change
+    templateInput.addEventListener('input', () => {
+        localStorage.setItem('templateName', templateInput.value);
+    });
+};
+
+    // Variable to hold the matched keys from the "Enter Parameter" input
+let keysFromEnterParameter = [];
+
+// Function to search for matching keys (key search box)
+function searchKeys(input) {
+    if (!input) {
+        // If "Enter Key" input is empty, show keys matched from "Enter Parameter"
+        document.getElementById('key_results').innerHTML = keysFromEnterParameter.length
+            ? keysFromEnterParameter.map(k => `<p onclick="selectKey('${k}')">${k}</p>`).join('')
+            : 'Results will appear here.';
+        return;
+    }
+
+    const keys = keysFromEnterParameter.filter(key => key.toLowerCase().includes(input.toLowerCase()));
+    document.getElementById('key_results').innerHTML = keys.length
+        ? keys.map(k => `<p onclick="selectKey('${k}')">${k}</p>`).join('')
+        : 'No matching keys found.';
+}
+
+// Function to handle the main search (key or value)
+function mainSearch(input) {
+    if (!input) {
+        clearResults();
+        return;
+    }
+
+    const keyValueMatch = input.match(/"([^\"]+)":\s*"([^\"]+)"/); // Check for key-value format
+
+    if (keyValueMatch) {
+        // If key-value pair is found, display the specific key
+        const [_, key, value] = keyValueMatch;
+        showSpecificKeyValue(key, value);
+    } else if (isNaN(input.trim())) {
+        // If it's just a key (non-numeric), search for matching keys
+        filterKeysBasedOnKeyAndValue(input.trim(), '');
+    } else {
+        // If it's a value, search for matching keys based on the value
+        filterKeysBasedOnKeyAndValue('', input.trim());
+    }
+}
+
+// Function to filter keys based on the parameter input
+function filterKeysBasedOnKeyAndValue(keyInput, valueInput) {
+    const matchedKeys = [];
+
+    function traverse(obj) {
+        for (const key in obj) {
+            const matchesKey = keyInput && key.toLowerCase().includes(keyInput.toLowerCase());
+            const matchesValue =
+                valueInput &&
+                ((typeof obj[key] === 'string' && obj[key].toLowerCase().includes(valueInput.toLowerCase())) ||
+                    (typeof obj[key] === 'number' && obj[key].toString().includes(valueInput)));
+
+            if ((keyInput && matchesKey) || (valueInput && matchesValue)) {
+                matchedKeys.push(key);
+            }
+
+            if (typeof obj[key] === 'object') {
+                traverse(obj[key]);
+            }
+        }
+    }
+
+    traverse(data);
+    filteredKeys = [...new Set(matchedKeys)];
+    keysFromEnterParameter = filteredKeys; // Store the matched keys for fallback
+    document.getElementById('key_results').innerHTML = filteredKeys.length
+        ? filteredKeys.map(k => `<p onclick="selectKey('${k}')">${k}</p>`).join('')
+        : 'No matching keys found.';
+}
+
+
+
+
+</script>
+<p id="templateNameDisplay">{{ template_name }}</p>
+</body>
+</html>

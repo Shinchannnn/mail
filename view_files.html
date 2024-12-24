@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Uploaded Files</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h1 {
+            text-align: center;
+            color: #444;
+            margin-bottom: 20px;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            display: block;
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+        }
+        button {
+            background-color: #007bff;
+            color: #fff;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #suggestions {
+            border: 1px solid #ddd;
+            background-color: #fff;
+            border-radius: 4px;
+            max-height: 150px;
+            overflow-y: auto;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            position: absolute;
+            z-index: 10;
+            width: calc(100% - 22px);
+        }
+        #suggestions div {
+            padding: 10px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        #suggestions div:hover {
+            background-color: #f1f1f1;
+        }
+        .error {
+            border-color: red;
+        }
+        .error-message {
+            color: red;
+            font-size: 0.9em;
+            margin-top: -10px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Search for Uploaded Files</h1>
+    <form id="fileForm" method="post" action="{{ url_for('view_files') }}">
+        <label for="search_bar">Search by Username or Filename:</label>
+        <input type="text" id="search_bar" name="search_bar" placeholder="Search files..." autocomplete="off" oninput="fetchSuggestions()">
+        <div id="suggestions"></div>
+    
+        <input type="hidden" name="selected_file" id="selected_file_input">
+
+        <div id="error-message" class="error-message" style="display: none;">Please select a file.</div>
+    
+        <button type="button" onclick="validateForm()">Select File</button>
+    </form>
+    
+    <script>
+        // Fetch suggestions based on the user's input
+        function fetchSuggestions() {
+            const query = document.getElementById('search_bar').value;
+            const suggestionsDiv = document.getElementById('suggestions');
+
+            if (query.length > 0) {
+                fetch(`/api/search_suggestions?q=${query}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        suggestionsDiv.innerHTML = ''; // Clear previous suggestions
+                        data.forEach(function (suggestion) {
+                            const div = document.createElement('div');
+                            div.textContent = suggestion.filename;
+                            div.onclick = function () {
+                                document.getElementById('search_bar').value = suggestion.filename;
+                                document.getElementById('selected_file_input').value = suggestion.filename;
+                                suggestionsDiv.innerHTML = ''; // Clear suggestions after selection
+                                clearError();
+                            };
+                            suggestionsDiv.appendChild(div);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error fetching suggestions:', error);
+                        suggestionsDiv.innerHTML = '<div>No suggestions available</div>';
+                    });
+            } else {
+                suggestionsDiv.innerHTML = ''; // Clear suggestions if input is empty
+            }
+        }
+
+        // Validate form before submission
+        function validateForm() {
+            const searchBar = document.getElementById('search_bar');
+            const selectedFileInput = document.getElementById('selected_file_input');
+            const errorMessage = document.getElementById('error-message');
+
+            if (!selectedFileInput.value) {
+                searchBar.classList.add('error');
+                errorMessage.style.display = 'block';
+            } else {
+                searchBar.classList.remove('error');
+                errorMessage.style.display = 'none';
+                document.getElementById('fileForm').submit();
+            }
+        }
+
+        // Clear error styles when the user selects a file
+        function clearError() {
+            const searchBar = document.getElementById('search_bar');
+            const errorMessage = document.getElementById('error-message');
+            searchBar.classList.remove('error');
+            errorMessage.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
